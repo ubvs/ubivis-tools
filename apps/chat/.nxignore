@@ -1,0 +1,26 @@
+# Ignore extracted files from official image
+extracted/
+
+# Ignore Docker build context
+.dockerignore
+
+# Ignore old source directories
+apps/
+meteor/
+client/
+server/
+packages/
+
+# Ignore build artifacts
+node_modules/
+dist/
+build/
+
+# Ignore logs
+*.log
+logs/
+
+# Ignore temporary files
+tmp/
+temp/
+.tmp/

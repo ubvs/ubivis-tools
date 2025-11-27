@@ -1,0 +1,58 @@
+{
+  "name": "Ubivis Tools",
+  "dockerComposeFile": "../docker-compose.yml",
+  "service": "nx-dev",
+  "workspaceFolder": "/workspace",
+  
+  "features": {
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {}
+  },
+
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "nrwl.angular-console",
+        "esbenp.prettier-vscode",
+        "dbaeumer.vscode-eslint",
+        "ms-vscode.vscode-typescript-next",
+        "bradlc.vscode-tailwindcss",
+        "ms-vscode-remote.remote-containers",
+        "ms-vscode.vscode-json",
+        "redhat.vscode-yaml"
+      ],
+      "settings": {
+        "editor.formatOnSave": true,
+        "editor.defaultFormatter": "esbenp.prettier-vscode",
+        "typescript.preferences.importModuleSpecifier": "relative",
+        "files.exclude": {
+          "**/.git": true,
+          "**/.DS_Store": true,
+          "**/node_modules": true,
+          "**/.nx/cache": true
+        }
+      }
+    }
+  },
+
+  "forwardPorts": [4200, 3000, 8080],
+  
+  "portsAttributes": {
+    "4200": {
+      "label": "Angular App",
+      "onAutoForward": "notify"
+    },
+    "3000": {
+      "label": "Node.js App",
+      "onAutoForward": "notify"
+    },
+    "8080": {
+      "label": "Keycloak/Admin",
+      "onAutoForward": "notify"
+    }
+  },
+
+  "postCreateCommand": "npm install",
+
+  "remoteUser": "node",
+  "shutdownAction": "stopCompose"
+}

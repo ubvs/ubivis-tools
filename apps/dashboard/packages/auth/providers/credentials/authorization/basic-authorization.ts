@@ -1,0 +1,37 @@
+import bcrypt from "bcrypt";
+import type { z } from "zod/v4";
+
+import type { Database } from "@homarr/db";
+import { and, eq } from "@homarr/db";
+import { users } from "@homarr/db/schema";
+import { logger } from "@homarr/log";
+import type { userSignInSchema } from "@homarr/validation/user";
+
+export const authorizeWithBasicCredentialsAsync = async (
+  db: Database,
+  credentials: z.infer<typeof userSignInSchema>,
+) => {
+  const user = await db.query.users.findFirst({
+    where: and(eq(users.name, credentials.name.toLowerCase()), eq(users.provider, "credentials")),
+  });
+
+  if (!user?.password) {
+    logger.info(`user ${credentials.name} was not found`);
+    return null;
+  }
+
+  logger.info(`user ${user.name} is trying to log in. checking password...`);
+  const isValidPassword = await bcrypt.compare(credentials.password, user.password);
+
+  if (!isValidPassword) {
+    logger.warn(`password for user ${user.name} was incorrect`);
+    return null;
+  }
+
+  logger.info(`user ${user.name} successfully authorized`);
+
+  return {
+    id: user.id,
+    name: user.name,
+  };
+};

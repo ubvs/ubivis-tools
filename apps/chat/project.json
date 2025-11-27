@@ -1,0 +1,60 @@
+{
+  "name": "chat",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "apps/chat",
+  "projectType": "application",
+  "tags": ["type:app", "platform:rocketchat", "runtime:docker"],
+  "targets": {
+    "build": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "docker compose -f apps/chat/.devcontainer/docker-compose.yml build",
+        "cwd": "{workspaceRoot}"
+      },
+      "metadata": {
+        "description": "Build Rocket.Chat Docker image with Infisical SDK"
+      }
+    },
+    "start": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "docker compose -f apps/chat/.devcontainer/docker-compose.yml up -d",
+        "cwd": "{workspaceRoot}"
+      },
+      "metadata": {
+        "description": "Start Rocket.Chat (secrets fetched from Infisical at runtime)"
+      }
+    },
+    "stop": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "docker compose -f apps/chat/.devcontainer/docker-compose.yml down",
+        "cwd": "{workspaceRoot}"
+      }
+    },
+    "restart": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "docker compose -f apps/chat/.devcontainer/docker-compose.yml restart rocketchat",
+        "cwd": "{workspaceRoot}"
+      }
+    },
+    "logs": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "docker compose -f apps/chat/.devcontainer/docker-compose.yml logs -f rocketchat",
+        "cwd": "{workspaceRoot}"
+      }
+    },
+    "health": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "curl -s http://localhost:3000/api/info | head -c 100 && echo",
+        "cwd": "{workspaceRoot}"
+      },
+      "metadata": {
+        "description": "Check if Rocket.Chat API is responding"
+      }
+    }
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "name": "Supabase Development",
+  "dockerComposeFile": ["../../docker-compose.yml"],
+  "service": "supabase",
+  "workspaceFolder": "/supabase",
+  "shutdownAction": "none",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-vscode.vscode-json",
+        "bradlc.vscode-tailwindcss"
+      ]
+    }
+  }
+}

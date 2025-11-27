@@ -1,0 +1,19 @@
+{
+  "name": "rocketchat-patched",
+  "version": "1.0.0",
+  "description": "Rocket.Chat with custom patches for Keycloak OAuth integration",
+  "private": true,
+  "scripts": {
+    "build": "./scripts/build.sh",
+    "start": "docker-compose up -d",
+    "stop": "docker-compose down",
+    "dev": "docker-compose up",
+    "logs": "docker-compose logs -f rocketchat",
+    "extract": "./scripts/extract-files.sh"
+  },
+  "keywords": ["rocketchat", "chat", "oauth", "keycloak", "patches"],
+  "author": "Your Organization",
+  "license": "MIT",
+  "devDependencies": {},
+  "dependencies": {}
+}

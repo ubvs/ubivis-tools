@@ -1,0 +1,174 @@
+{
+  "name": "dashboard",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "apps/dashboard",
+  "projectType": "application",
+  "tags": [],
+  "targets": {
+    "build": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "docker build -t homarr:local -f Dockerfile .",
+        "cwd": "apps/dashboard"
+      },
+      "inputs": [
+        "{projectRoot}/Dockerfile",
+        "{projectRoot}/scripts/**/*",
+        "{projectRoot}/package.json",
+        "default"
+      ],
+      "outputs": []
+    },
+    "dev": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "docker compose -f .devcontainer/docker-compose.yml up --build",
+        "cwd": "apps/dashboard"
+      },
+      "inputs": [
+        "{projectRoot}/.devcontainer/docker-compose.yml",
+        "{projectRoot}/.devcontainer/.env",
+        "{projectRoot}/scripts/start-with-secrets.sh"
+      ]
+    },
+    "start": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "docker compose -f .devcontainer/docker-compose.yml up -d",
+        "cwd": "apps/dashboard"
+      },
+      "inputs": [
+        "{projectRoot}/.devcontainer/docker-compose.yml",
+        "{projectRoot}/.devcontainer/.env"
+      ]
+    },
+    "stop": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "docker compose -f .devcontainer/docker-compose.yml down",
+        "cwd": "apps/dashboard"
+      }
+    },
+    "restart": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "docker compose -f .devcontainer/docker-compose.yml restart",
+        "cwd": "apps/dashboard"
+      }
+    },
+    "logs": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "docker compose -f .devcontainer/docker-compose.yml logs -f",
+        "cwd": "apps/dashboard"
+      }
+    },
+    "health-check": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "docker compose -f .devcontainer/docker-compose.yml ps && echo 'Dashboard is healthy' || echo 'Dashboard is unhealthy'",
+        "cwd": "apps/dashboard"
+      }
+    },
+    "test-secrets": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "set -a && source .devcontainer/.env && set +a && node scripts/test-secrets.js",
+        "cwd": "apps/dashboard"
+      },
+      "inputs": [
+        "{projectRoot}/.devcontainer/.env",
+        "{projectRoot}/scripts/test-secrets.js"
+      ]
+    },
+    "build-with-secrets": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "docker build -t homarr:local-secrets -f Dockerfile .",
+        "cwd": "apps/dashboard"
+      },
+      "inputs": [
+        "{projectRoot}/Dockerfile",
+        "{projectRoot}/scripts/start-with-secrets.sh",
+        "{projectRoot}/.devcontainer/.env",
+        "{projectRoot}/package.json"
+      ],
+      "outputs": []
+    },
+    "dev-with-secrets": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "docker compose -f .devcontainer/docker-compose.yml up --build",
+        "cwd": "apps/dashboard"
+      },
+      "dependsOn": ["test-secrets"],
+      "inputs": [
+        "{projectRoot}/.devcontainer/docker-compose.yml",
+        "{projectRoot}/.devcontainer/.env",
+        "{projectRoot}/scripts/start-with-secrets.sh"
+      ]
+    },
+    "setup-groups": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "bash scripts/setup-groups.sh",
+        "cwd": "apps/dashboard"
+      },
+      "inputs": [
+        "{projectRoot}/scripts/setup-groups.sh"
+      ]
+    },
+    "sync-groups": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "bash scripts/sync-groups-from-keycloak.sh",
+        "cwd": "apps/dashboard"
+      },
+      "inputs": [
+        "{projectRoot}/scripts/sync-groups-from-keycloak.sh"
+      ]
+    },
+    "create-groups": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "docker exec dashboard-homarr node /app/scripts/create-groups.cjs",
+        "cwd": "apps/dashboard"
+      },
+      "inputs": [
+        "{projectRoot}/scripts/create-groups.cjs"
+      ]
+    },
+    "check-updates": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "node scripts/update-homarr.js check",
+        "cwd": "apps/dashboard"
+      },
+      "inputs": [
+        "{projectRoot}/scripts/update-homarr.js",
+        "{projectRoot}/package.json"
+      ]
+    },
+    "apply-updates": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "node scripts/update-homarr.js update",
+        "cwd": "apps/dashboard"
+      },
+      "inputs": [
+        "{projectRoot}/scripts/update-homarr.js",
+        "{projectRoot}/package.json"
+      ]
+    },
+    "fix-update-notification": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "bash scripts/update-container-version.sh",
+        "cwd": "apps/dashboard"
+      },
+      "inputs": [
+        "{projectRoot}/scripts/update-container-version.sh"
+      ]
+    }
+  }
+}

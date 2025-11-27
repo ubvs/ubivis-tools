@@ -1,0 +1,13 @@
+# Ignore Homarr's internal monorepo structure
+# These are pnpm workspace packages, not Nx projects
+
+apps/
+packages/
+tooling/
+e2e/
+development/
+scripts/
+docs/
+turbo/
+patches/
+static-data/

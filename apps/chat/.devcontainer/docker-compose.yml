@@ -1,0 +1,167 @@
+services:
+  rocketchat:
+    build:
+      context: ..
+      dockerfile: .devcontainer/Dockerfile
+    container_name: chat-rocketchat
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      # =======================================================================
+      # NON-SECRET CONFIGURATION (hardcoded - not from Infisical)
+      # =======================================================================
+      # MongoDB connection
+      MONGO_URL: mongodb://mongo:27017/rocketchat?replicaSet=rs0
+      MONGO_OPLOG_URL: mongodb://mongo:27017/local?replicaSet=rs0
+      
+      # Microservices configuration
+      TRANSPORTER: nats://nats:4222
+      MOLECULER_LOG_LEVEL: info
+      
+      # Development settings
+      TEST_MODE: "false"
+      EXIT_UNHANDLEDPROMISEREJECTION: "false"
+      OVERWRITE_SETTING_Log_Level: "2"
+      
+      # Bypass license restrictions - Enable Enterprise Premium Plan
+      OVERWRITE_SETTING_Enterprise_License: ""
+      OVERWRITE_SETTING_Cloud_Workspace_Id: ""
+      OVERWRITE_SETTING_Statistics_reporting: false
+      OVERWRITE_SETTING_Allow_Invalid_SelfSigned_Certs: true
+      OVERWRITE_SETTING_Accounts_OAuth_Custom_Enable: true
+      OVERWRITE_SETTING_Enterprise_License_Status: "valid"
+      
+      # Force Enterprise Premium license
+      OVERWRITE_SETTING_Cloud_Workspace_License: "enterprise"
+      OVERWRITE_SETTING_License: "enterprise"
+      OVERWRITE_SETTING_Enterprise_License_Valid: true
+      OVERWRITE_SETTING_Enterprise_License_Expired: false
+      OVERWRITE_SETTING_Enterprise_License_Trial: false
+      OVERWRITE_SETTING_Show_Setup_Wizard: "disabled"
+      OVERWRITE_SETTING_Cloud_Service_Agree_PrivacyTerms: true
+      OVERWRITE_SETTING_Cloud_Workspace_Had_Trial: false
+      OVERWRITE_SETTING_Cloud_Workspace_Registration_Client_Uri: ""
+      OVERWRITE_SETTING_Subscription_Hide_Subscription_Banner: true
+      
+      # Enable all Enterprise Premium features
+      OVERWRITE_SETTING_Enterprise_MaxActiveUsers: 999999
+      OVERWRITE_SETTING_Enterprise_MaxGuestUsers: 999999
+      OVERWRITE_SETTING_Enterprise_MaxRoomsPerGuest: 999999
+      OVERWRITE_SETTING_Enterprise_MaxMonthlyActiveContacts: 999999
+      OVERWRITE_SETTING_Enterprise_Bundle_Enabled: true
+      OVERWRITE_SETTING_Enterprise_Omnichannel_Enabled: true
+      OVERWRITE_SETTING_Enterprise_LiveChat_Enabled: true
+      OVERWRITE_SETTING_Enterprise_Auditing_Enabled: true
+      OVERWRITE_SETTING_Enterprise_LDAP_Enabled: true
+      OVERWRITE_SETTING_Enterprise_SAML_Enabled: true
+      OVERWRITE_SETTING_Enterprise_Federation_Enabled: true
+      OVERWRITE_SETTING_Enterprise_VideoConference_Enabled: true
+      OVERWRITE_SETTING_Enterprise_VoIP_Enabled: true
+      OVERWRITE_SETTING_Enterprise_Teams_Enabled: true
+      OVERWRITE_SETTING_Enterprise_DeviceManagement_Enabled: true
+      OVERWRITE_SETTING_Enterprise_PremiumApps_Enabled: true
+      OVERWRITE_SETTING_Enterprise_ReadReceipts_Enabled: true
+      OVERWRITE_SETTING_Enterprise_OutlookCalendar_Enabled: true
+      
+      # Enable Keycloak OAuth (secrets injected by startup script from Infisical)
+      OVERWRITE_SETTING_Accounts_OAuth_Custom-Keycloak: true
+      
+      # =======================================================================
+      # SECRETS - Injected at runtime by start-with-secrets.sh from Infisical
+      # These are NOT in .env - they are fetched inside the container
+      # =======================================================================
+      # ROOT_URL, PORT, ADMIN_*, KEYCLOAK_* all come from Infisical
+    env_file:
+      - .env
+    extra_hosts:
+      - "localhost:host-gateway"
+    volumes:
+      # Mount workspace for development
+      - ../:/workspace:cached
+      # Persistent uploads
+      - rocketchat_uploads:/app/uploads
+    networks:
+      - app-network
+    depends_on:
+      mongo:
+        condition: service_started
+      mongo-init:
+        condition: service_completed_successfully
+      nats:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/api/info"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 120s
+
+  # MongoDB with replica set (required for Rocket.Chat)
+  mongo:
+    image: mongo:7.0
+    container_name: chat-mongodb
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    command: ["--replSet", "rs0", "--bind_ip_all"]
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_INITDB_ROOT_USERNAME:-}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_INITDB_ROOT_PASSWORD:-}
+    volumes:
+      - mongodb_data:/data/db
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "rs.status().ok"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 40s
+
+  # MongoDB replica set initializer
+  mongo-init:
+    image: mongo:7.0
+    container_name: chat-mongodb-init
+    restart: "no"
+    depends_on:
+      mongo:
+        condition: service_started
+    command: >
+      bash -c "
+        sleep 10 &&
+        mongosh --host mongo:27017 --eval \"
+          try {
+            rs.status();
+            print('Replica set already initialized');
+          } catch(e) {
+            rs.initiate({
+              _id: 'rs0',
+              members: [{ _id: 0, host: 'mongo:27017' }]
+            });
+            print('Replica set initialized');
+          }
+        \"
+      "
+    networks:
+      - app-network
+
+  # NATS for microservices communication
+  nats:
+    image: nats:2.10-alpine
+    container_name: chat-nats
+    restart: unless-stopped
+    ports:
+      - "4222:4222"
+    networks:
+      - app-network
+    command: ["-js", "-m", "8222"]
+
+volumes:
+  mongodb_data:
+  rocketchat_uploads:
+
+networks:
+  app-network:
+    external: true
+    name: devcontainer_app-network

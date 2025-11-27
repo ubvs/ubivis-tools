@@ -1,0 +1,122 @@
+version: '3.8'
+
+services:
+  # Main Nx development container
+  nx-dev:
+    build:
+      context: .
+      dockerfile: .devcontainer/Dockerfile
+    volumes:
+      # Mount the workspace
+      - .:/workspace:cached
+      # Docker socket for Docker-in-Docker
+      - /var/run/docker.sock:/var/run/docker.sock
+    ports:
+      - "4200:4200"  # Angular
+      - "3000:3000"  # Node.js
+      - "8080:8080"  # Keycloak/Admin
+    environment:
+      - NODE_ENV=development
+      - NX_DAEMON=false
+    networks:
+      - app-network
+    command: sleep infinity
+
+  # PostgreSQL database
+  postgres:
+    image: postgres:15-alpine
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: postgres
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - app-network
+
+  # Redis cache
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - app-network
+    command: redis-server --appendonly yes
+
+  # MongoDB
+  mongodb:
+    image: mongo:7
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: password
+      MONGO_INITDB_DATABASE: admin
+    volumes:
+      - mongodb_data:/data/db
+    networks:
+      - app-network
+
+  # Keycloak SSO Manager (SSOM app)
+  keycloak:
+    image: quay.io/keycloak/keycloak:latest
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+      - "8443:8443"
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak
+      KC_DB_USERNAME: postgres
+      KC_DB_PASSWORD: postgres
+      KC_HOSTNAME: localhost
+      KC_HOSTNAME_STRICT: "false"
+      KC_HTTP_ENABLED: "true"
+      KC_LOG_LEVEL: INFO
+    volumes:
+      - ./apps/ssom:/workspace:cached
+      - keycloak_data:/opt/keycloak/data
+    networks:
+      - app-network
+    depends_on:
+      - postgres
+    command: start-dev
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8080/admin/ || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # Placeholder for Rocket.Chat (to be configured later)
+  # rocket-chat:
+  #   image: rocket.chat:latest
+  #   restart: unless-stopped
+  #   ports:
+  #     - "3000:3000"
+  #   environment:
+  #     ROOT_URL: http://localhost:3000
+  #     MONGO_URL: mongodb://admin:password@mongodb:27017/rocketchat?authSource=admin
+  #   depends_on:
+  #     - mongodb
+  #   networks:
+  #     - app-network
+
+volumes:
+  postgres_data:
+  redis_data:
+  mongodb_data:
+  keycloak_data:
+
+networks:
+  app-network:
+    driver: bridge

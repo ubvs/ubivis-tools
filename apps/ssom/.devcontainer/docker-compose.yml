@@ -1,0 +1,107 @@
+services:
+  # Infisical Agent - fetches secrets and renders them for Keycloak
+  infisical-agent:
+    build:
+      context: ./infisical
+      dockerfile: Dockerfile
+    container_name: ssom-infisical-agent
+    restart: unless-stopped
+    environment:
+      # Infisical connection settings
+      INFISICAL_SITE_URL: ${INFISICAL_SITE_URL:-http://secrets-infisical:8080}
+      INFISICAL_PROJECT_ID: ${INFISICAL_PROJECT_ID}
+      INFISICAL_ENVIRONMENT: ${INFISICAL_ENVIRONMENT:-dev}
+      INFISICAL_CLIENT_ID: ${INFISICAL_CLIENT_ID}
+      INFISICAL_CLIENT_SECRET: ${INFISICAL_CLIENT_SECRET}
+    volumes:
+      # Shared volume for rendered secrets
+      - secrets_data:/run/secrets
+    networks:
+      - app-network
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    healthcheck:
+      test: ["CMD", "test", "-f", "/run/secrets/keycloak.env"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    profiles:
+      - infisical
+
+  keycloak:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ssom-keycloak
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+      - "8443:8443"
+    environment:
+      # Static configuration (non-sensitive)
+      KC_DB: ${KC_DB:-postgres}
+      KC_HOSTNAME: ${KC_HOSTNAME:-ssom-keycloak}
+      KC_HOSTNAME_STRICT: "false"
+      KC_HOSTNAME_PORT: ${KC_HOSTNAME_PORT:-8080}
+      KC_HTTP_ENABLED: "true"
+      KC_LOG_LEVEL: ${KC_LOG_LEVEL:-INFO}
+      
+      # === SECRETS MANAGEMENT MODE ===
+      # Option 1: Use Infisical (when infisical profile is active)
+      # Secrets are loaded from /run/secrets/keycloak.env
+      
+      # Option 2: Direct environment variables (default for dev)
+      # Admin credentials
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KC_BOOTSTRAP_ADMIN_USERNAME:-admin}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KC_BOOTSTRAP_ADMIN_PASSWORD:-admin}
+      # Database configuration
+      KC_DB_URL: ${KC_DB_URL:-jdbc:postgresql://postgres:5432/keycloak}
+      KC_DB_USERNAME: ${KC_DB_USERNAME:-postgres}
+      KC_DB_PASSWORD: ${KC_DB_PASSWORD:-postgres}
+    volumes:
+      # Mount workspace for custom themes, providers, etc.
+      - ../:/workspace:cached
+      # Persistent data
+      - keycloak_data:/opt/keycloak/data
+      # Secrets from Infisical agent (when using infisical profile)
+      - secrets_data:/run/secrets:ro
+    networks:
+      - app-network
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      - postgres
+    command: start-dev
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8080/admin/ || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # Reference to parent postgres service
+  postgres:
+    image: postgres:15-alpine
+    container_name: ssom-postgres
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: keycloak
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
+    networks:
+      - app-network
+
+volumes:
+  keycloak_data:
+  postgres_data:
+  secrets_data:
+
+networks:
+  app-network:
+    driver: bridge

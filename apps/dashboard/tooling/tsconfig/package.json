@@ -1,0 +1,11 @@
+{
+  "name": "@homarr/tsconfig",
+  "version": "0.1.0",
+  "private": true,
+  "license": "Apache-2.0",
+  "exports": {
+    "./base": "./base.json",
+    "./nextjs": "./nextjs.json",
+    "./react": "./react.json"
+  }
+}

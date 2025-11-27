@@ -1,0 +1,41 @@
+# Advanced Dockerfile for Keycloak with Java development tools
+# Use this if you need to develop custom Keycloak providers
+# To use: Update docker-compose.yml to use 'Dockerfile.dev' instead of 'Dockerfile'
+
+FROM quay.io/keycloak/keycloak:latest
+
+# Switch to root for setup
+USER root
+
+# Install system dependencies using the available package manager
+# Try different package managers in order of likelihood
+RUN (microdnf install -y findutils tar gzip && microdnf clean all) || \
+    (yum install -y findutils tar gzip && yum clean all) || \
+    (apt-get update && apt-get install -y findutils tar gzip && apt-get clean) || \
+    echo "Package manager not found - some tools may be missing"
+
+# Install Maven for Java development
+ENV MAVEN_VERSION=3.9.5
+ENV MAVEN_HOME=/opt/maven
+ENV PATH="${MAVEN_HOME}/bin:${PATH}"
+
+# Download and install Maven (using the Keycloak image's built-in curl/wget)
+RUN curl -fsSL https://archive.apache.org/dist/maven/maven-3/${MAVEN_VERSION}/binaries/apache-maven-${MAVEN_VERSION}-bin.tar.gz -o /tmp/maven.tar.gz && \
+    tar xzf /tmp/maven.tar.gz -C /opt && \
+    ln -s /opt/apache-maven-${MAVEN_VERSION} /opt/maven && \
+    rm /tmp/maven.tar.gz
+
+# Verify Java is available (should be in base Keycloak image)
+RUN java -version
+
+# Set workspace directory
+WORKDIR /workspace
+
+# Switch back to keycloak user for security
+USER keycloak
+
+# Expose Keycloak ports
+EXPOSE 8080 8443
+
+# Default command
+CMD ["start-dev"]

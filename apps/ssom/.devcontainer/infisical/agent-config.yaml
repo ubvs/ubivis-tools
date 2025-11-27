@@ -1,0 +1,36 @@
+# Infisical Agent Configuration for Keycloak
+# This agent fetches secrets from Infisical and renders them for Keycloak
+# Environment variables are passed from docker-compose
+
+infisical:
+  address: "${INFISICAL_SITE_URL}"
+
+auth:
+  type: "universal-auth"
+  config:
+    # Credentials passed via environment variables
+    client-id: "${INFISICAL_CLIENT_ID}"
+    client-secret: "${INFISICAL_CLIENT_SECRET}"
+    remove_client_secret_on_read: false
+
+# Where to store the access token (optional, for debugging)
+sinks:
+  - type: "file"
+    config:
+      path: "/tmp/infisical-token"
+
+# Templates define how secrets are rendered
+templates:
+  # Render Keycloak environment variables
+  - template-content: |
+      {{- with listSecrets "${INFISICAL_PROJECT_ID}" "${INFISICAL_ENVIRONMENT}" "/keycloak" }}
+      {{- range . }}
+      {{ .Key }}={{ .Value }}
+      {{- end }}
+      {{- end }}
+    destination-path: /run/secrets/keycloak.env
+    config:
+      polling-interval: 60s
+      execute:
+        timeout: 30
+        command: ""

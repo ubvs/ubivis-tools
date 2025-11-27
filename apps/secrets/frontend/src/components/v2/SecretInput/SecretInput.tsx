@@ -1,0 +1,151 @@
+/* eslint-disable react/no-danger */
+import { forwardRef, TextareaHTMLAttributes } from "react";
+import { twMerge } from "tailwind-merge";
+
+import { useToggle } from "@app/hooks";
+import { HIDDEN_SECRET_VALUE } from "@app/pages/secret-manager/SecretDashboardPage/components/SecretListView/SecretItem";
+
+const REGEX = /(\${([a-zA-Z0-9-_.]+)})/g;
+
+const syntaxHighlight = (
+  content?: string | null,
+  isVisible?: boolean,
+  isImport?: boolean,
+  isLoadingValue?: boolean,
+  isErrorLoadingValue?: boolean,
+  placeholder?: string
+) => {
+  if (isLoadingValue) return HIDDEN_SECRET_VALUE;
+  if (isErrorLoadingValue)
+    return <span className="ph-no-capture text-red/75">Error loading secret value.</span>;
+  if (isImport && !content) return "IMPORTED";
+  if (placeholder && (content === "" || !content)) return placeholder;
+  if (content === "") return "EMPTY";
+  if (!content) return "EMPTY";
+  if (!isVisible) return HIDDEN_SECRET_VALUE;
+
+  let skipNext = false;
+  const formattedContent = content.split(REGEX).flatMap((el, i) => {
+    const isInterpolationSyntax = el.startsWith("${") && el.endsWith("}");
+    if (isInterpolationSyntax) {
+      skipNext = true;
+      return (
+        <span className="ph-no-capture text-yellow" key={`secret-value-${i + 1}`}>
+          &#36;&#123;
+          <span className="ph-no-capture text-yellow-200/80">{el.slice(2, -1)}</span>
+          &#125;
+        </span>
+      );
+    }
+    if (skipNext) {
+      skipNext = false;
+      return [];
+    }
+    return el;
+  });
+
+  // akhilmhdh: Dont remove this br. I am still clueless how this works but weirdly enough
+  // when break is added a line break works properly
+  return formattedContent.concat(
+    <br key={`secret-value-linebreak-${formattedContent.length + 1}`} />
+  );
+};
+
+type Props = TextareaHTMLAttributes<HTMLTextAreaElement> & {
+  value?: string | null;
+  isVisible?: boolean;
+  valueAlwaysHidden?: boolean;
+  isImport?: boolean;
+  isReadOnly?: boolean;
+  isDisabled?: boolean;
+  containerClassName?: string;
+  canEditButNotView?: boolean;
+  isLoadingValue?: boolean;
+  isErrorLoadingValue?: boolean;
+};
+
+const commonClassName = "font-mono text-sm caret-white border-none outline-hidden w-full break-all";
+
+export const SecretInput = forwardRef<HTMLTextAreaElement, Props>(
+  (
+    {
+      value,
+      isVisible,
+      isImport,
+      valueAlwaysHidden,
+      containerClassName,
+      onBlur,
+      isDisabled,
+      isReadOnly,
+      onFocus,
+      canEditButNotView,
+      isLoadingValue,
+      isErrorLoadingValue,
+      placeholder,
+      ...props
+    },
+    ref
+  ) => {
+    const [isSecretFocused, setIsSecretFocused] = useToggle();
+
+    return (
+      <div
+        className={twMerge("no-scrollbar w-full overflow-auto rounded-md", containerClassName)}
+        style={{ maxHeight: `${21 * 7}px` }}
+      >
+        <div className="relative overflow-hidden">
+          <pre aria-hidden className="m-0">
+            <code className={`inline-block w-full ${commonClassName}`}>
+              <span
+                className={twMerge(
+                  "whitespace-break-spaces",
+                  placeholder && !value && "text-gray-500/50"
+                )}
+              >
+                {syntaxHighlight(
+                  value,
+                  isVisible || (isSecretFocused && !valueAlwaysHidden),
+                  isImport,
+                  isLoadingValue,
+                  isErrorLoadingValue,
+                  placeholder
+                )}
+              </span>
+            </code>
+          </pre>
+          <textarea
+            placeholder={placeholder}
+            style={{ whiteSpace: "break-spaces" }}
+            aria-label="secret value"
+            ref={ref}
+            className={`no-scrollbar absolute inset-0 block h-full resize-none overflow-hidden bg-transparent text-transparent focus:border-0 ${commonClassName}`}
+            onFocus={(evt) => {
+              onFocus?.(evt);
+              setIsSecretFocused.on();
+              if (canEditButNotView && value === HIDDEN_SECRET_VALUE) {
+                evt.currentTarget.select();
+              }
+            }}
+            onMouseDown={(e) => {
+              if (canEditButNotView && value === HIDDEN_SECRET_VALUE) {
+                e.preventDefault();
+                e.currentTarget.select();
+              }
+            }}
+            disabled={isDisabled}
+            spellCheck={false}
+            onBlur={(evt) => {
+              onBlur?.(evt);
+              setIsSecretFocused.off();
+            }}
+            value={value || ""}
+            {...props}
+            readOnly={isReadOnly || isLoadingValue || isErrorLoadingValue}
+          />
+        </div>
+      </div>
+    );
+  }
+);
+
+SecretInput.displayName = "SecretInput";

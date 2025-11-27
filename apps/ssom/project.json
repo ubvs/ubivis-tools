@@ -1,0 +1,64 @@
+{
+  "name": "ssom",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "apps/ssom",
+  "projectType": "application",
+  "tags": ["type:app", "platform:keycloak", "runtime:java"],
+  "targets": {
+    "start": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "docker compose -f apps/ssom/.devcontainer/docker-compose.yml up -d",
+        "cwd": "{workspaceRoot}"
+      },
+      "configurations": {
+        "dev": {
+          "command": "docker compose -f apps/ssom/.devcontainer/docker-compose.yml up"
+        }
+      }
+    },
+    "stop": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "docker compose -f apps/ssom/.devcontainer/docker-compose.yml down",
+        "cwd": "{workspaceRoot}"
+      }
+    },
+    "restart": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "docker compose -f apps/ssom/.devcontainer/docker-compose.yml restart",
+        "cwd": "{workspaceRoot}"
+      }
+    },
+    "logs": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "docker compose -f apps/ssom/.devcontainer/docker-compose.yml logs -f keycloak",
+        "cwd": "{workspaceRoot}"
+      }
+    },
+    "build": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "docker compose -f apps/ssom/.devcontainer/docker-compose.yml build",
+        "cwd": "{workspaceRoot}"
+      }
+    },
+    "deploy": {
+      "executor": "nx:run-commands",
+      "dependsOn": ["build"],
+      "options": {
+        "command": "echo 'Deploy to Coolify - see README.md for instructions'",
+        "cwd": "{workspaceRoot}"
+      }
+    },
+    "health-check": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "curl -sI http://localhost:8080/admin/ | grep -q '302' && echo 'Keycloak is healthy' || echo 'Keycloak is not responding'",
+        "cwd": "{workspaceRoot}"
+      }
+    }
+  }
+}

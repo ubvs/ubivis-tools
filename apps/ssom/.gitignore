@@ -1,0 +1,34 @@
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# IDE
+.vscode/
+.idea/
+
+# Java
+*.class
+*.jar
+!providers/.gitkeep
+target/
+*.log
+
+# Maven
+.mvn/
+mvnw
+mvnw.cmd
+
+# Logs
+logs/
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Keycloak data (if running locally without Docker)
+data/
+
+# Infisical credentials (NEVER commit the .env file with secrets)
+.devcontainer/.env

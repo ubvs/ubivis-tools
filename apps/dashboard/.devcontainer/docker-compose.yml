@@ -1,0 +1,50 @@
+services:
+  homarr:
+    container_name: dashboard-homarr
+    image: homarr:local
+    build:
+      context: ../
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file:
+      - .env
+    # Override command to use our startup script that fetches secrets from secrets manager
+    command: ["/bin/bash", "/app/scripts/start-with-secrets.sh"]
+    volumes:
+      - ../config:/app/data/configs
+      - ../data:/data
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    environment:
+      - BASE_URL=http://localhost:7575
+      - AUTH_PROVIDER=oidc
+      - AUTH_PROVIDERS=credentials,oidc
+      - AUTH_OIDC_URI=http://ssom-keycloak:8080/realms/ubivis
+      - NEXTAUTH_URL=http://localhost:7575
+      - AUTH_OIDC_CLIENT_NAME=Keycloak
+      - AUTH_OIDC_ADMIN_ROLE=${AUTH_OIDC_ADMIN_ROLE:-Administrators}
+      - AUTH_OIDC_OWNER_ROLE=${AUTH_OIDC_OWNER_ROLE:-Administrators}
+      - AUTH_OIDC_SCOPE=openid profile email groups
+      # Secrets below are injected by start-with-secrets.js from Infisical:
+      # - AUTH_OIDC_CLIENT_ID (from Infisical)
+      # - AUTH_OIDC_CLIENT_SECRET (from Infisical)  
+      # - AUTH_OIDC_ISSUER (from Infisical)
+      # - AUTH_SECRET (from Infisical)
+      # - SECRET_ENCRYPTION_KEY (from Infisical)
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:7575"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    ports:
+      - "7575:7575"
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    external: true
+    name: devcontainer_app-network
+

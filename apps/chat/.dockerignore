@@ -1,0 +1,81 @@
+# Git
+.git
+.gitignore
+.gitattributes
+
+# CI/CD
+.github
+.gitlab-ci.yml
+.kodiak.toml
+
+# IDE
+.vscode
+.idea
+*.sublime-workspace
+.vim/
+.exrc
+.history
+.envrc
+
+# Dependencies
+node_modules
+.pnp
+.pnp.js
+.pnpm-store
+
+# Testing
+coverage
+.nyc_output
+
+# Build outputs
+dist
+build
+.next
+out
+storybook-static
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+
+# Environment
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Temporary files
+*.tmp
+*.temp
+.DS_Store
+*.pem
+
+# Documentation
+*.md
+!README.md
+LICENSE
+HISTORY.md
+FEATURES.md
+CODE_OF_CONDUCT.md
+SECURITY.md
+VIP*.md
+
+# Development
+.devcontainer
+.gitpod
+.houston
+development/
+data/
+registration.yaml
+
+# Docker
+docker-compose*.yml
+Dockerfile
+.dockerignore
+
+# Misc
+.preview
+.changeset
