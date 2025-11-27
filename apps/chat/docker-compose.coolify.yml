@@ -1,0 +1,153 @@
+# =============================================================================
+# ROCKET.CHAT - PRODUCTION DEPLOYMENT
+# =============================================================================
+# Deploy Order: #4 - Depends on Infisical (10.0.0.13) and Keycloak (10.0.0.12)
+# Private Network: Attach to 10.0.0.11
+# =============================================================================
+# This uses the existing start-with-secrets.sh script which fetches ALL secrets
+# from Infisical at startup and configures Keycloak OAuth
+# =============================================================================
+
+services:
+  rocketchat:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: chat-rocketchat
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      # MongoDB Connection (local replica set)
+      MONGO_URL: mongodb://mongo:27017/rocketchat?replicaSet=rs0
+      MONGO_OPLOG_URL: mongodb://mongo:27017/local?replicaSet=rs0
+      
+      # Microservices Configuration
+      TRANSPORTER: nats://nats:4222
+      MOLECULER_LOG_LEVEL: info
+      
+      # Application Settings
+      ROOT_URL: ${ROOT_URL:-https://chat.yourdomain.com}
+      PORT: 3000
+      
+      # Development/Production Settings
+      NODE_ENV: production
+      TEST_MODE: "false"
+      EXIT_UNHANDLEDPROMISEREJECTION: "false"
+      OVERWRITE_SETTING_Log_Level: "2"
+      
+      # Enterprise Features (Bypass License)
+      OVERWRITE_SETTING_Enterprise_License: ""
+      OVERWRITE_SETTING_Cloud_Workspace_Id: ""
+      OVERWRITE_SETTING_Statistics_reporting: false
+      OVERWRITE_SETTING_Allow_Invalid_SelfSigned_Certs: true
+      OVERWRITE_SETTING_Accounts_OAuth_Custom_Enable: true
+      OVERWRITE_SETTING_Enterprise_License_Status: "valid"
+      OVERWRITE_SETTING_Cloud_Workspace_License: "enterprise"
+      OVERWRITE_SETTING_License: "enterprise"
+      OVERWRITE_SETTING_Show_Setup_Wizard: "disabled"
+      
+      # Keycloak OAuth (enabled - secrets injected by start-with-secrets.sh)
+      OVERWRITE_SETTING_Accounts_OAuth_Custom-Keycloak: true
+      
+      # Infisical Configuration (for fetching secrets at startup)
+      INFISICAL_SITE_URL: ${INFISICAL_SITE_URL:-http://10.0.0.2:8080}
+      INFISICAL_PROJECT_ID: ${INFISICAL_PROJECT_ID}
+      INFISICAL_CLIENT_ID: ${INFISICAL_CLIENT_ID}
+      INFISICAL_CLIENT_SECRET: ${INFISICAL_CLIENT_SECRET}
+      INFISICAL_ENVIRONMENT: ${INFISICAL_ENVIRONMENT:-production}
+    
+    # Use startup script that fetches secrets from Infisical
+    entrypoint: ["/bin/sh", "/app/scripts/start-with-secrets.sh"]
+    
+    volumes:
+      - rocketchat_uploads:/app/uploads
+    
+    networks:
+      - chat
+    
+    depends_on:
+      mongo:
+        condition: service_healthy
+      mongo-init:
+        condition: service_completed_successfully
+      nats:
+        condition: service_started
+    
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/api/info"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 120s
+
+  # MongoDB with replica set (required for Rocket.Chat)
+  mongo:
+    image: mongo:7.0
+    container_name: chat-mongodb
+    restart: unless-stopped
+    command: ["--replSet", "rs0", "--bind_ip_all"]
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_INITDB_ROOT_USERNAME:-}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_INITDB_ROOT_PASSWORD:-}
+    volumes:
+      - mongodb_data:/data/db
+    networks:
+      - chat
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "rs.status().ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 40s
+
+  # MongoDB replica set initializer
+  mongo-init:
+    image: mongo:7.0
+    container_name: chat-mongodb-init
+    restart: "no"
+    depends_on:
+      mongo:
+        condition: service_started
+    command: >
+      bash -c "
+        sleep 10 &&
+        mongosh --host mongo:27017 --eval \"
+          try {
+            rs.status();
+            print('Replica set already initialized');
+          } catch(e) {
+            rs.initiate({
+              _id: 'rs0',
+              members: [{ _id: 0, host: 'mongo:27017' }]
+            });
+            print('Replica set initialized');
+          }
+        \"
+      "
+    networks:
+      - chat
+
+  # NATS for microservices communication
+  nats:
+    image: nats:2.10-alpine
+    container_name: chat-nats
+    restart: unless-stopped
+    networks:
+      - chat
+    command: ["-js", "-m", "8222"]
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8222/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  mongodb_data:
+    driver: local
+  rocketchat_uploads:
+    driver: local
+
+networks:
+  chat:
+    driver: bridge

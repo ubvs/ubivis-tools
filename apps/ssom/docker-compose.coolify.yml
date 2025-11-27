@@ -1,0 +1,96 @@
+# =============================================================================
+# KEYCLOAK (SSO MANAGER) - PRODUCTION DEPLOYMENT
+# =============================================================================
+# Deploy Order: #2 - Depends on Infisical (10.0.0.13)
+# Private Network: Attach to 10.0.0.12
+# =============================================================================
+
+services:
+  keycloak:
+    image: quay.io/keycloak/keycloak:latest
+    container_name: ssom-keycloak
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+      - "8443:8443"
+    environment:
+      # Admin Credentials - SET IN COOLIFY
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KC_BOOTSTRAP_ADMIN_USERNAME:-admin}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KC_BOOTSTRAP_ADMIN_PASSWORD}
+      
+      # Database Configuration - local PostgreSQL
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak
+      KC_DB_USERNAME: ${KC_DB_USERNAME:-keycloak}
+      KC_DB_PASSWORD: ${KC_DB_PASSWORD}
+      
+      # Hostname Configuration - SET YOUR DOMAIN
+      KC_HOSTNAME: ${KC_HOSTNAME:-ssom.yourdomain.com}
+      KC_HOSTNAME_STRICT: "false"
+      KC_HTTP_ENABLED: "true"
+      KC_HOSTNAME_ADMIN_URL: https://${KC_HOSTNAME:-ssom.yourdomain.com}
+      KC_HOSTNAME_URL: https://${KC_HOSTNAME:-ssom.yourdomain.com}
+      
+      # Proxy Configuration (for Coolify reverse proxy)
+      KC_PROXY: edge
+      KC_PROXY_HEADERS: xforwarded
+      
+      # Health & Metrics
+      KC_HEALTH_ENABLED: "true"
+      KC_METRICS_ENABLED: "true"
+      
+      # Logging
+      KC_LOG_LEVEL: info
+      KC_LOG_CONSOLE_OUTPUT: default
+      
+      # Features
+      KC_FEATURES: token-exchange,admin-fine-grained-authz,declarative-user-profile
+      
+      # Infisical Integration (for fetching secrets)
+      INFISICAL_URL: ${INFISICAL_URL:-http://10.0.0.2:8080}
+      INFISICAL_PROJECT_ID: ${INFISICAL_PROJECT_ID}
+      INFISICAL_CLIENT_ID: ${INFISICAL_CLIENT_ID}
+      INFISICAL_CLIENT_SECRET: ${INFISICAL_CLIENT_SECRET}
+      INFISICAL_ENVIRONMENT: ${INFISICAL_ENVIRONMENT:-production}
+    volumes:
+      - keycloak_data:/opt/keycloak/data
+    networks:
+      - ssom
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: start --optimized
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8080/health/ready || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 90s
+
+  postgres:
+    image: postgres:15-alpine
+    container_name: ssom-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: keycloak
+      POSTGRES_USER: ${KC_DB_USERNAME:-keycloak}
+      POSTGRES_PASSWORD: ${KC_DB_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - ssom
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready --username=${KC_DB_USERNAME:-keycloak}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  keycloak_data:
+    driver: local
+  postgres_data:
+    driver: local
+
+networks:
+  ssom:
+    driver: bridge

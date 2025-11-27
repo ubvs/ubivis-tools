@@ -1,0 +1,86 @@
+# =============================================================================
+# DASHBOARD (HOMARR) - PRODUCTION DEPLOYMENT
+# =============================================================================
+# Deploy Order: #3 - Depends on Infisical (10.0.0.13) and Keycloak (10.0.0.12)
+# Private Network: Attach to 10.0.0.10
+# =============================================================================
+# This uses the existing start-with-secrets.sh script which fetches secrets
+# from Infisical at startup. Secrets include:
+#   - AUTH_SECRET
+#   - SECRET_ENCRYPTION_KEY  
+#   - AUTH_OIDC_CLIENT_ID
+#   - AUTH_OIDC_CLIENT_SECRET
+#   - AUTH_OIDC_ISSUER
+# =============================================================================
+
+services:
+  homarr:
+    container_name: dashboard-homarr
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      # Application Settings
+      NODE_ENV: production
+      PORT: 7575
+      BASE_URL: ${BASE_URL:-https://dashboard.yourdomain.com}
+      
+      # Database (SQLite - local)
+      DB_URL: /appdata/db/db.sqlite
+      DB_DIALECT: sqlite
+      DB_DRIVER: better-sqlite3
+      
+      # Redis (embedded - local)
+      REDIS_IS_EXTERNAL: "false"
+      DISABLE_REDIS_LOGS: "true"
+      
+      # Authentication Provider
+      AUTH_PROVIDER: oidc
+      AUTH_PROVIDERS: credentials,oidc
+      
+      # Keycloak SSO Configuration (via private network)
+      AUTH_OIDC_URI: ${AUTH_OIDC_URI:-http://10.0.0.12:8080/realms/ubivis}
+      NEXTAUTH_URL: ${BASE_URL:-https://dashboard.yourdomain.com}
+      AUTH_OIDC_CLIENT_NAME: Keycloak
+      AUTH_OIDC_ADMIN_ROLE: ${AUTH_OIDC_ADMIN_ROLE:-Administrators}
+      AUTH_OIDC_OWNER_ROLE: ${AUTH_OIDC_OWNER_ROLE:-Administrators}
+      AUTH_OIDC_SCOPE: openid profile email groups
+      
+      # Infisical Configuration (for fetching secrets at startup)
+      INFISICAL_SITE_URL: ${INFISICAL_SITE_URL:-http://10.0.0.2:8080}
+      INFISICAL_PROJECT_ID: ${INFISICAL_PROJECT_ID}
+      INFISICAL_CLIENT_ID: ${INFISICAL_CLIENT_ID}
+      INFISICAL_CLIENT_SECRET: ${INFISICAL_CLIENT_SECRET}
+      INFISICAL_ENVIRONMENT: ${INFISICAL_ENVIRONMENT:-production}
+      
+      # Logging
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    
+    # Override command to use startup script that fetches secrets
+    command: ["/bin/bash", "/app/scripts/start-with-secrets.sh"]
+    
+    volumes:
+      - appdata:/appdata
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    
+    ports:
+      - "7575:7575"
+    
+    networks:
+      - dashboard
+    
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:7575"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+volumes:
+  appdata:
+    driver: local
+
+networks:
+  dashboard:
+    driver: bridge
