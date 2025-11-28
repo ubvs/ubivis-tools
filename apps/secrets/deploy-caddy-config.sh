@@ -10,8 +10,9 @@ set -e
 
 # Configuration
 DOMAIN="ubivis-secrets.ideasnet.app"
-BACKEND_ALIAS="ubivis-secrets-backend"
 BACKEND_PORT="8080"
+# Note: We use the actual container name instead of alias because
+# Coolify places containers on its own network where aliases don't resolve
 CADDY_CONFIG_DIR="/data/coolify/proxy/caddy/dynamic"
 CADDY_CONFIG_FILE="${CADDY_CONFIG_DIR}/ubivis-secrets.caddy"
 
@@ -36,11 +37,11 @@ echo "✓ Found backend container: $BACKEND_CONTAINER"
 echo "✓ Connecting Caddy proxy to app network..."
 docker network connect "$APP_NETWORK" coolify-proxy 2>/dev/null || echo "  Already connected"
 
-# Create Caddy configuration
+# Create Caddy configuration using actual container name
 echo "✓ Creating Caddy configuration..."
 cat > "$CADDY_CONFIG_FILE" <<EOF
 ${DOMAIN} {
-    reverse_proxy ${BACKEND_ALIAS}:${BACKEND_PORT}
+    reverse_proxy ${BACKEND_CONTAINER}:${BACKEND_PORT}
 }
 EOF
 
