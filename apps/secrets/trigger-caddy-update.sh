@@ -5,17 +5,12 @@
 # This script is called by Coolify post-deployment hook to trigger
 # the GitHub Actions workflow that updates Caddy configuration
 # Uses GitHub App authentication (organization-approved)
+# Uses Node.js (available in Infisical container) for JWT generation
 # =============================================================================
 
 set -e
 
-# Detect if we're running inside a container or on host
-if [ -f /.dockerenv ] || grep -q docker /proc/1/cgroup 2>/dev/null; then
-    echo "⚠️  Running inside container - installing dependencies"
-    # Install required tools
-    apk add --no-cache curl jq openssl bash 2>/dev/null || \
-    apt-get update && apt-get install -y curl jq openssl 2>/dev/null || true
-fi
+echo "🔐 Using Node.js for GitHub App authentication..."
 
 # GitHub repository info
 REPO_OWNER="ubvs"
@@ -32,59 +27,78 @@ if [ -z "$GITHUB_APP_ID" ] || [ -z "$GITHUB_APP_PRIVATE_KEY" ]; then
     exit 1
 fi
 
-# Generate JWT for GitHub App authentication
-generate_jwt() {
-    local app_id="$1"
-    local private_key="$2"
-    
-    # Decode private key if base64 encoded
-    if echo "$private_key" | grep -q "^[A-Za-z0-9+/]*={0,2}$"; then
-        private_key=$(echo "$private_key" | base64 -d 2>/dev/null)
-    fi
-    
-    # Write private key to temp file (openssl needs a file, not stdin)
-    local key_file=$(mktemp)
-    echo "$private_key" > "$key_file"
-    
-    local now=$(date +%s)
-    local iat=$((now - 60))
-    local exp=$((now + 600))
-    
-    local header='{"alg":"RS256","typ":"JWT"}'
-    local payload='{"iat":'$iat',"exp":'$exp',"iss":'$app_id'}'
-    
-    local header_base64=$(echo -n "$header" | openssl base64 -e -A | tr '+/' '-_' | tr -d '=')
-    local payload_base64=$(echo -n "$payload" | openssl base64 -e -A | tr '+/' '-_' | tr -d '=')
-    local signature_base64=$(echo -n "${header_base64}.${payload_base64}" | openssl dgst -binary -sha256 -sign "$key_file" | openssl base64 -e -A | tr '+/' '-_' | tr -d '=')
-    
-    # Clean up temp file
-    rm -f "$key_file"
-    
-    echo "${header_base64}.${payload_base64}.${signature_base64}"
+# Use Node.js to generate JWT and get access token (works in Infisical container)
+ACCESS_TOKEN=$(node -e "
+const crypto = require('crypto');
+const https = require('https');
+
+const appId = process.env.GITHUB_APP_ID;
+const privateKeyB64 = process.env.GITHUB_APP_PRIVATE_KEY;
+const privateKey = Buffer.from(privateKeyB64, 'base64').toString('utf8');
+
+// Generate JWT
+const now = Math.floor(Date.now() / 1000);
+const payload = {
+  iat: now - 60,
+  exp: now + 600,
+  iss: appId
+};
+
+const header = Buffer.from(JSON.stringify({ alg: 'RS256', typ: 'JWT' })).toString('base64url');
+const payloadB64 = Buffer.from(JSON.stringify(payload)).toString('base64url');
+const signatureInput = header + '.' + payloadB64;
+const signature = crypto.sign('RSA-SHA256', Buffer.from(signatureInput), privateKey).toString('base64url');
+const jwt = signatureInput + '.' + signature;
+
+// Get installation ID
+function httpsRequest(options, postData) {
+  return new Promise((resolve, reject) => {
+    const req = https.request(options, (res) => {
+      let data = '';
+      res.on('data', (chunk) => data += chunk);
+      res.on('end', () => resolve(JSON.parse(data)));
+    });
+    req.on('error', reject);
+    if (postData) req.write(postData);
+    req.end();
+  });
 }
 
-echo "🔐 Generating GitHub App JWT..."
-JWT=$(generate_jwt "$GITHUB_APP_ID" "$GITHUB_APP_PRIVATE_KEY")
-
-echo "🔑 Getting installation access token..."
-INSTALLATION_ID=$(curl -s -H "Authorization: Bearer $JWT" \
-    -H "Accept: application/vnd.github+json" \
-    "https://api.github.com/app/installations" | jq -r '.[0].id')
-
-if [ -z "$INSTALLATION_ID" ] || [ "$INSTALLATION_ID" = "null" ]; then
-    echo "❌ Failed to get installation ID"
-    exit 1
-fi
-
-ACCESS_TOKEN=$(curl -s -X POST \
-    -H "Authorization: Bearer $JWT" \
-    -H "Accept: application/vnd.github+json" \
-    "https://api.github.com/app/installations/$INSTALLATION_ID/access_tokens" | jq -r '.token')
+(async () => {
+  const installations = await httpsRequest({
+    hostname: 'api.github.com',
+    path: '/app/installations',
+    headers: {
+      'Authorization': 'Bearer ' + jwt,
+      'Accept': 'application/vnd.github+json',
+      'User-Agent': 'Coolify-Deployment'
+    }
+  });
+  
+  const installationId = installations[0].id;
+  
+  const tokenResponse = await httpsRequest({
+    hostname: 'api.github.com',
+    path: '/app/installations/' + installationId + '/access_tokens',
+    method: 'POST',
+    headers: {
+      'Authorization': 'Bearer ' + jwt,
+      'Accept': 'application/vnd.github+json',
+      'User-Agent': 'Coolify-Deployment'
+    }
+  });
+  
+  console.log(tokenResponse.token);
+})();
+" 2>&1)
 
 if [ -z "$ACCESS_TOKEN" ] || [ "$ACCESS_TOKEN" = "null" ]; then
     echo "❌ Failed to get access token"
+    echo "Debug: $ACCESS_TOKEN"
     exit 1
 fi
+
+echo "✅ GitHub App authentication successful"
 
 echo "🚀 Triggering GitHub Actions workflow to update Caddy..."
 
