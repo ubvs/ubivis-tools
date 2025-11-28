@@ -65,31 +65,49 @@ function httpsRequest(options, postData) {
 }
 
 (async () => {
-  const installations = await httpsRequest({
-    hostname: 'api.github.com',
-    path: '/app/installations',
-    headers: {
-      'Authorization': 'Bearer ' + jwt,
-      'Accept': 'application/vnd.github+json',
-      'User-Agent': 'Coolify-Deployment'
+  try {
+    const installations = await httpsRequest({
+      hostname: 'api.github.com',
+      path: '/app/installations',
+      headers: {
+        'Authorization': 'Bearer ' + jwt,
+        'Accept': 'application/vnd.github+json',
+        'User-Agent': 'Coolify-Deployment'
+      }
+    });
+    
+    if (!installations || !installations[0]) {
+      console.error('ERROR: No installations found');
+      process.exit(1);
     }
-  });
-  
-  const installationId = installations[0].id;
-  
-  const tokenResponse = await httpsRequest({
-    hostname: 'api.github.com',
-    path: '/app/installations/' + installationId + '/access_tokens',
-    method: 'POST',
-    headers: {
-      'Authorization': 'Bearer ' + jwt,
-      'Accept': 'application/vnd.github+json',
-      'User-Agent': 'Coolify-Deployment'
+    
+    const installationId = installations[0].id;
+    
+    const tokenResponse = await httpsRequest({
+      hostname: 'api.github.com',
+      path: '/app/installations/' + installationId + '/access_tokens',
+      method: 'POST',
+      headers: {
+        'Authorization': 'Bearer ' + jwt,
+        'Accept': 'application/vnd.github+json',
+        'User-Agent': 'Coolify-Deployment'
+      }
+    });
+    
+    if (!tokenResponse || !tokenResponse.token) {
+      console.error('ERROR: No token in response');
+      process.exit(1);
     }
-  });
-  
-  console.log(tokenResponse.token);
-})();
+    
+    console.log(tokenResponse.token);
+  } catch (error) {
+    console.error('ERROR:', error.message);
+    process.exit(1);
+  }
+})().catch(err => {
+  console.error('FATAL:', err.message);
+  process.exit(1);
+});
 " 2>&1)
 
 if [ -z "$ACCESS_TOKEN" ] || [ "$ACCESS_TOKEN" = "null" ]; then
