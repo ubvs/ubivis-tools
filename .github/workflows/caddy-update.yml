@@ -34,7 +34,7 @@ jobs:
             ATTEMPT=$((ATTEMPT + 1))
             
             BACKEND=$(ssh -o StrictHostKeyChecking=no root@$SERVER_IP \
-              "docker ps --format '{{.Names}}' | grep -E '^backend-gw8g80g4kog0c4so4o0o0k48-[0-9]+$' || true")
+              "docker ps --format '{{.Names}}' | grep -E '^backend-' | grep -v 'coolify' | head -1 || true")
             
             if [ -n "$BACKEND" ]; then
               echo "✅ Backend container found: $BACKEND"
