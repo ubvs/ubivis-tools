@@ -12,9 +12,9 @@ set -e
 # Detect if we're running inside a container or on host
 if [ -f /.dockerenv ] || grep -q docker /proc/1/cgroup 2>/dev/null; then
     echo "⚠️  Running inside container - installing dependencies"
-    if ! command -v curl &> /dev/null; then
-        apk add --no-cache curl jq openssl 2>/dev/null || apt-get update && apt-get install -y curl jq openssl 2>/dev/null || true
-    fi
+    # Install required tools
+    apk add --no-cache curl jq openssl bash 2>/dev/null || \
+    apt-get update && apt-get install -y curl jq openssl 2>/dev/null || true
 fi
 
 # GitHub repository info
@@ -39,8 +39,12 @@ generate_jwt() {
     
     # Decode private key if base64 encoded
     if echo "$private_key" | grep -q "^[A-Za-z0-9+/]*={0,2}$"; then
-        private_key=$(echo "$private_key" | base64 -d)
+        private_key=$(echo "$private_key" | base64 -d 2>/dev/null)
     fi
+    
+    # Write private key to temp file (openssl needs a file, not stdin)
+    local key_file=$(mktemp)
+    echo "$private_key" > "$key_file"
     
     local now=$(date +%s)
     local iat=$((now - 60))
@@ -51,7 +55,10 @@ generate_jwt() {
     
     local header_base64=$(echo -n "$header" | openssl base64 -e -A | tr '+/' '-_' | tr -d '=')
     local payload_base64=$(echo -n "$payload" | openssl base64 -e -A | tr '+/' '-_' | tr -d '=')
-    local signature_base64=$(echo -n "${header_base64}.${payload_base64}" | openssl dgst -binary -sha256 -sign <(echo "$private_key") | openssl base64 -e -A | tr '+/' '-_' | tr -d '=')
+    local signature_base64=$(echo -n "${header_base64}.${payload_base64}" | openssl dgst -binary -sha256 -sign "$key_file" | openssl base64 -e -A | tr '+/' '-_' | tr -d '=')
+    
+    # Clean up temp file
+    rm -f "$key_file"
     
     echo "${header_base64}.${payload_base64}.${signature_base64}"
 }
