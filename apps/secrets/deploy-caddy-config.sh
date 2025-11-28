@@ -20,11 +20,13 @@ APP_NETWORK=$(docker network ls --format '{{.Name}}' | grep '^gw8g80g4' | head -
 
 echo "🚀 Configuring Caddy for Infisical (Secrets)..."
 
-# Find the actual backend container name
-BACKEND_CONTAINER=$(docker ps --format '{{.Names}}' | grep 'backend-gw8g80g4' | head -1)
+# Find the actual backend container name (Coolify-generated pattern)
+BACKEND_CONTAINER=$(docker ps --format '{{.Names}}' | grep -E '^backend-gw8g80g4kog0c4so4o0o0k48-[0-9]+$' | head -1)
 
 if [ -z "$BACKEND_CONTAINER" ]; then
     echo "❌ Error: Backend container not found"
+    echo "Available containers:"
+    docker ps --format '{{.Names}}'
     exit 1
 fi
 
