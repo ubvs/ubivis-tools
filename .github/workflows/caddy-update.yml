@@ -1,0 +1,85 @@
+name: Update Caddy Configuration
+
+on:
+  workflow_dispatch:
+    # This workflow can be triggered manually or via API
+
+jobs:
+  update-caddy:
+    name: Update Caddy for Infisical
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Wait for backend to be ready
+        env:
+          SERVER_IP: ${{ secrets.SECRETS_SERVER_IP }}
+          SSH_PRIVATE_KEY: ${{ secrets.SECRETS_SERVER_SSH_KEY }}
+        run: |
+          echo "⏳ Checking if backend is running..."
+          
+          # Setup SSH
+          mkdir -p ~/.ssh
+          echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H $SERVER_IP >> ~/.ssh/known_hosts 2>/dev/null
+          
+          # Poll for backend container (max 2 minutes)
+          MAX_ATTEMPTS=24
+          ATTEMPT=0
+          
+          while [ $ATTEMPT -lt $MAX_ATTEMPTS ]; do
+            ATTEMPT=$((ATTEMPT + 1))
+            
+            BACKEND=$(ssh -o StrictHostKeyChecking=no root@$SERVER_IP \
+              "docker ps --format '{{.Names}}' | grep -E '^backend-gw8g80g4kog0c4so4o0o0k48-[0-9]+$' || true")
+            
+            if [ -n "$BACKEND" ]; then
+              echo "✅ Backend container found: $BACKEND"
+              break
+            fi
+            
+            if [ $ATTEMPT -eq $MAX_ATTEMPTS ]; then
+              echo "❌ Backend container not found after 2 minutes"
+              exit 1
+            fi
+            
+            echo "⏳ Attempt $ATTEMPT/$MAX_ATTEMPTS: Waiting for backend..."
+            sleep 5
+          done
+
+      - name: Configure Caddy reverse proxy
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SECRETS_SERVER_SSH_KEY }}
+          SERVER_IP: ${{ secrets.SECRETS_SERVER_IP }}
+        run: |
+          echo "🔧 Configuring Caddy on production server..."
+          
+          # Setup SSH
+          mkdir -p ~/.ssh
+          echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H $SERVER_IP >> ~/.ssh/known_hosts 2>/dev/null
+          
+          # Run Caddy configuration script
+          ssh -o StrictHostKeyChecking=no root@$SERVER_IP \
+            'bash -c "$(curl -fsSL https://raw.githubusercontent.com/ubvs/ubivis-tools/main/apps/secrets/deploy-caddy-config.sh)"'
+          
+          echo "✅ Caddy configuration complete"
+
+      - name: Verify deployment
+        env:
+          DOMAIN: ubivis-secrets.ideasnet.app
+        run: |
+          echo "🔍 Verifying deployment..."
+          sleep 10
+          
+          RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" https://$DOMAIN)
+          
+          if [ "$RESPONSE" = "200" ]; then
+            echo "✅ Site is responding correctly!"
+          else
+            echo "⚠️  Site returned HTTP $RESPONSE"
+          fi
