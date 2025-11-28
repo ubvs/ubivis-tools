@@ -52,3 +52,4 @@ out
 .env.*.local
 **/.env
 **/.env.local
+infisical-local-backup-*.sql
