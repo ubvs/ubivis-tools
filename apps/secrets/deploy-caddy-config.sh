@@ -12,18 +12,14 @@ set -e
 # Configuration
 DOMAIN="ubivis-secrets.ideasnet.app"
 BACKEND_PORT="8080"
-# Note: We use the actual container name instead of alias because
-# Coolify places containers on its own network where aliases don't resolve
 CADDY_CONFIG_DIR="/data/coolify/proxy/caddy/dynamic"
 CADDY_CONFIG_FILE="${CADDY_CONFIG_DIR}/ubivis-secrets.caddy"
 
-# Auto-detect Coolify network name
-APP_NETWORK=$(docker network ls --format '{{.Name}}' | grep '^gw8g80g4' | head -1)
-
 echo "🚀 Configuring Caddy for Infisical (Secrets)..."
 
-# Find the actual backend container name (Coolify-generated pattern)
-BACKEND_CONTAINER=$(docker ps --format '{{.Names}}' | grep -E '^backend-gw8g80g4kog0c4so4o0o0k48-[0-9]+$' | head -1)
+# Find the backend container dynamically
+# Look for any container with name pattern: backend-<coolify-app-id>-<timestamp>
+BACKEND_CONTAINER=$(docker ps --format '{{.Names}}' | grep -E '^backend-[a-z0-9]+-[0-9]+$' | grep -v 'coolify' | head -1)
 
 if [ -z "$BACKEND_CONTAINER" ]; then
     echo "❌ Error: Backend container not found"
@@ -33,6 +29,16 @@ if [ -z "$BACKEND_CONTAINER" ]; then
 fi
 
 echo "✓ Found backend container: $BACKEND_CONTAINER"
+
+# Auto-detect the network the backend container is on
+APP_NETWORK=$(docker inspect "$BACKEND_CONTAINER" --format '{{range $net,$v := .NetworkSettings.Networks}}{{$net}}{{end}}' | head -1)
+
+if [ -z "$APP_NETWORK" ]; then
+    echo "❌ Error: Could not detect backend container's network"
+    exit 1
+fi
+
+echo "✓ Detected network: $APP_NETWORK"
 
 # Ensure Caddy proxy is connected to the app network
 echo "✓ Connecting Caddy proxy to app network..."

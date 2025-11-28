@@ -4,17 +4,23 @@ Self-hosted secrets management platform for storing and managing sensitive crede
 
 ## 🚨 CRITICAL: Encryption Key Management
 
-### ⚠️ NEVER Rotate These Keys After Initial Deployment
+### ⚠️ Security Trade-off: Key Rotation vs Data Persistence
 
-The following environment variables are **encryption keys** used to encrypt data in the database:
+Infisical has a **fundamental limitation**: it does not support encryption key rotation without data loss. This creates a security vs. operational trade-off:
+
+**The Dilemma:**
+- **Security Best Practice**: Rotate encryption keys regularly (quarterly/annually)
+- **Infisical Reality**: Rotating keys makes all existing data permanently inaccessible
+
+**The following environment variables encrypt all data in the database:**
 
 - `ENCRYPTION_KEY` - Master encryption key for all secrets
-- `AUTH_SECRET` - Authentication encryption key
+- `AUTH_SECRET` - Authentication encryption key  
 - `JWT_AUTH_SECRET` - JWT token signing key
 - `JWT_REFRESH_SECRET` - JWT refresh token key
 - `JWT_SERVICE_SECRET` - Service token key
 
-**⚠️ WARNING**: If you rotate these keys after the initial deployment, Infisical **WILL NOT BE ABLE TO DECRYPT EXISTING DATA** and will fail to start with errors like:
+**⚠️ WARNING**: If you rotate these keys after initial deployment, Infisical **CANNOT DECRYPT EXISTING DATA** and will crash with:
 
 ```
 Error: Unsupported state or unable to authenticate data
@@ -62,24 +68,66 @@ This will:
 - ❌ **Permanently delete all existing secrets**
 - ❌ Require recreating all projects and secrets from scratch
 
-### Best Practices
+### Mitigation Strategies
 
-1. **Generate Strong Keys Once**: Use a secure random generator for initial deployment
-   ```bash
-   openssl rand -hex 32  # For each key
-   ```
+Since Infisical doesn't support key rotation, you must implement compensating controls:
 
-2. **Backup Keys Securely**: Store initial keys in a secure location:
-   - Password manager (1Password, Bitwarden, LastPass)
-   - Encrypted USB drive in physical safe
-   - Hardware security module (HSM)
-   - **DO NOT** commit to Git
+#### 1. **Treat This as a "Break Glass" System**
+- Use Infisical to **bootstrap** other secrets management systems
+- Don't store long-lived production secrets directly in Infisical
+- Use it to store keys that access proper KMS systems (AWS KMS, Azure Key Vault, GCP KMS)
 
-3. **Document in Emergency Procedures**: Ensure team knows where keys are stored
+#### 2. **Implement Periodic Data Migration**
+Instead of rotating keys, periodically "rotate" the entire Infisical instance:
 
-4. **Test Backups**: Verify you can restore the application from backups
+```bash
+# Every 90 days (or per your security policy):
+1. Deploy NEW Infisical instance with new encryption keys
+2. Export all secrets from OLD instance (via UI or API)
+3. Import secrets into NEW instance  
+4. Update all applications to use NEW instance
+5. Destroy OLD instance after verification period
+```
 
-5. **Use Infrastructure as Code**: Store keys in encrypted Terraform/Ansible vaults
+#### 3. **Key Security Best Practices**
+
+**Generate Strong Keys Once:**
+```bash
+openssl rand -hex 32  # For ENCRYPTION_KEY
+openssl rand -hex 64  # For AUTH_SECRET and JWT secrets
+```
+
+**Secure Key Storage:**
+- Store in an **external** secrets manager (ironic, but necessary)
+- Hardware Security Module (HSM) for critical environments
+- Encrypted vault (HashiCorp Vault, AWS Secrets Manager)
+- Password manager with emergency access (1Password, Bitwarden)
+- **NEVER** commit to Git
+- **NEVER** store in Infisical itself (chicken-and-egg problem)
+
+**Emergency Access:**
+- Document key storage location in runbooks
+- Implement "break glass" procedures for key recovery
+- Test recovery procedures quarterly
+
+#### 4. **Use Short-Lived Credentials Everywhere**
+Minimize the impact of non-rotatable keys:
+- Use dynamic secrets feature for databases
+- Implement short-lived API tokens (hours, not days)
+- Rotate **secrets stored in** Infisical frequently (even if keys can't rotate)
+
+#### 5. **Consider Alternatives for High-Security Environments**
+If key rotation is a hard requirement (compliance, policy), consider:
+- **Cloud-native KMS**: AWS Secrets Manager, Azure Key Vault, GCP Secret Manager
+- **HashiCorp Vault**: Supports key rotation with re-encryption
+- **CyberArk**: Enterprise solution with key rotation
+- **Infisical Cloud**: Managed service where they handle key rotation
+
+#### 6. **Monitoring & Audit**
+- Monitor for unauthorized access attempts
+- Audit secret access logs weekly
+- Alert on bulk secret exports
+- Track failed authentication attempts
 
 ## Environment Variables
 
