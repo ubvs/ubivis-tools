@@ -3,7 +3,7 @@
 # Infisical (Secrets) - Post-Deployment Caddy Configuration
 # =============================================================================
 # This script configures Caddy reverse proxy after Coolify deployment
-# Run this on the target server after deployment completes
+# Can be run on host or from within a container (via nsenter)
 # =============================================================================
 
 set -e
@@ -14,7 +14,9 @@ BACKEND_ALIAS="ubivis-secrets-backend"
 BACKEND_PORT="8080"
 CADDY_CONFIG_DIR="/data/coolify/proxy/caddy/dynamic"
 CADDY_CONFIG_FILE="${CADDY_CONFIG_DIR}/ubivis-secrets.caddy"
-APP_NETWORK="gw8g80g4kog0c4so4o0o0k48"  # Coolify-generated network name
+
+# Auto-detect Coolify network name
+APP_NETWORK=$(docker network ls --format '{{.Name}}' | grep '^gw8g80g4' | head -1)
 
 echo "🚀 Configuring Caddy for Infisical (Secrets)..."
 
