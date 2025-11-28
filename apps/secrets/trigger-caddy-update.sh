@@ -27,88 +27,11 @@ if [ -z "$GITHUB_APP_ID" ] || [ -z "$GITHUB_APP_PRIVATE_KEY" ]; then
     exit 1
 fi
 
-# Use Node.js to generate JWT and get access token (works in Infisical container)
-ACCESS_TOKEN=$(node -e "
-const crypto = require('crypto');
-const https = require('https');
+# Download the auth script from the repository
+curl -fsSL "https://raw.githubusercontent.com/$REPO_OWNER/$REPO_NAME/$REF/apps/secrets/github-app-auth.js" -o /tmp/github-app-auth.js
 
-const appId = process.env.GITHUB_APP_ID;
-const privateKeyB64 = process.env.GITHUB_APP_PRIVATE_KEY;
-const privateKey = Buffer.from(privateKeyB64, 'base64').toString('utf8');
-
-// Generate JWT
-const now = Math.floor(Date.now() / 1000);
-const payload = {
-  iat: now - 60,
-  exp: now + 600,
-  iss: appId
-};
-
-const header = Buffer.from(JSON.stringify({ alg: 'RS256', typ: 'JWT' })).toString('base64url');
-const payloadB64 = Buffer.from(JSON.stringify(payload)).toString('base64url');
-const signatureInput = header + '.' + payloadB64;
-const signature = crypto.sign('RSA-SHA256', Buffer.from(signatureInput), privateKey).toString('base64url');
-const jwt = signatureInput + '.' + signature;
-
-// Get installation ID
-function httpsRequest(options, postData) {
-  return new Promise((resolve, reject) => {
-    const req = https.request(options, (res) => {
-      let data = '';
-      res.on('data', (chunk) => data += chunk);
-      res.on('end', () => resolve(JSON.parse(data)));
-    });
-    req.on('error', reject);
-    if (postData) req.write(postData);
-    req.end();
-  });
-}
-
-(async () => {
-  try {
-    const installations = await httpsRequest({
-      hostname: 'api.github.com',
-      path: '/app/installations',
-      headers: {
-        'Authorization': 'Bearer ' + jwt,
-        'Accept': 'application/vnd.github+json',
-        'User-Agent': 'Coolify-Deployment'
-      }
-    });
-    
-    if (!installations || !installations[0]) {
-      console.error('ERROR: No installations found');
-      process.exit(1);
-    }
-    
-    const installationId = installations[0].id;
-    
-    const tokenResponse = await httpsRequest({
-      hostname: 'api.github.com',
-      path: '/app/installations/' + installationId + '/access_tokens',
-      method: 'POST',
-      headers: {
-        'Authorization': 'Bearer ' + jwt,
-        'Accept': 'application/vnd.github+json',
-        'User-Agent': 'Coolify-Deployment'
-      }
-    });
-    
-    if (!tokenResponse || !tokenResponse.token) {
-      console.error('ERROR: No token in response');
-      process.exit(1);
-    }
-    
-    console.log(tokenResponse.token);
-  } catch (error) {
-    console.error('ERROR:', error.message);
-    process.exit(1);
-  }
-})().catch(err => {
-  console.error('FATAL:', err.message);
-  process.exit(1);
-});
-" 2>&1)
+# Run the auth script to get access token
+ACCESS_TOKEN=$(node /tmp/github-app-auth.js 2>&1)
 
 if [ -z "$ACCESS_TOKEN" ] || [ "$ACCESS_TOKEN" = "null" ]; then
     echo "❌ Failed to get access token"
