@@ -3,17 +3,11 @@
 # Infisical (Secrets) - Post-Deployment Caddy Configuration
 # =============================================================================
 # This script configures Caddy reverse proxy after Coolify deployment
-# Can be run from host, GitHub Actions, or Coolify post-deployment hook
+# Must be run on the HOST (not inside a container)
+# Triggered by: GitHub Actions workflow
 # =============================================================================
 
 set -e
-
-# If running inside a container (Coolify context), escape to host
-if [ -f /.dockerenv ] || grep -q docker /proc/1/cgroup 2>/dev/null; then
-    echo "Running inside container, escaping to host..."
-    # Use nsenter to execute on host
-    exec nsenter -t 1 -m -u -n -i "$0" "$@"
-fi
 
 # Configuration
 DOMAIN="ubivis-secrets.ideasnet.app"
